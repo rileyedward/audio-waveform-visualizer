@@ -24,6 +24,7 @@ Posting a mix to YouTube without visuals leaves it buried. Existing visualizer t
 - **Dynamic On-Screen Tracklist**: When a fingerprint DB is provided, the currently-playing track's name is rendered on the video. Between tracks it crossfades out while a "NEXT:" preview of the incoming track fades in.
 - **YouTube Tracklist + Chapters**: Emit a `tracklist.txt` formatted for YouTube descriptions and embed MP4 chapter markers so YouTube auto-creates a chapter-split timeline on upload.
 - **YouTube-Ready Output**: 1080p 30fps H.264 video with 320kbps AAC audio, muxed directly via FFmpeg.
+- **Local Web UI**: A point-and-click browser interface (`visualizer-ui`) for picking your mix, browsing styles/palettes with live previews, managing the fingerprint library, watching real-time render progress, and revealing the finished MP4 in Finder — all served from your machine, no internet required.
 
 ## Getting Started
 
@@ -64,6 +65,7 @@ Ensure you have the following prerequisites installed on your system. You can ve
     ```bash
     .venv/bin/visualize --help
     .venv/bin/fingerprint-index --help
+    .venv/bin/visualizer-ui --help
     ```
 
 4. Render a visualizer for your mix (swap in your own filenames):
@@ -91,6 +93,36 @@ Ensure you have the following prerequisites installed on your system. You can ve
     ```bash
     ./examples/sample_usage.sh
     ```
+
+### Web UI (recommended)
+
+Prefer point-and-click over flags? `visualizer-ui` is a local web app that wraps the same render and indexing pipeline behind a browser interface. It runs entirely on your machine — `127.0.0.1` only, no accounts, no upload to any service.
+
+1. Launch the server (auto-opens your browser to `http://localhost:8765`):
+
+    ```bash
+    .venv/bin/visualizer-ui
+    ```
+
+    Pass `--no-browser` to suppress the auto-open, `--port 9000` to use a different port, or `--host 0.0.0.0` if you want to reach it from another machine on your LAN.
+
+2. **Render tab** — drop your `.wav` / `.mp3` mix onto the page (or click to pick one), then:
+    - Click a style tile (radial / bars / waveform / particles) — each tile shows a thumbnail of the look.
+    - Click a palette tile (sunset / neon / ocean / mono / forest / ember) — same idea, with a live thumbnail.
+    - Fill in artist, mix name, and (optional) static title.
+    - Toggle **Auto-detect tracks**, **Write YouTube tracklist.txt**, and **Embed MP4 chapter markers** as you would the corresponding CLI flags.
+    - Set the output file name. Renders always save to `~/Downloads/`.
+    - Hit **Render**. A progress panel shows the current phase (loading → features → matching → rendering → muxing), a live progress bar, an ETA (e.g. *~3m 14s left*), and a tail of the log.
+    - When it finishes, click **Reveal in Finder** to jump straight to the MP4.
+
+3. **Library tab** — manage the fingerprint database used by Auto-Tracklist:
+    - The stats card shows current track count, total fingerprints, and DB size on disk.
+    - **Add tracks (upload files)** — pick one or more audio files; they get copied into `~/Music/visualizer-library/` and indexed automatically.
+    - **Index a folder** — paste an absolute folder path (e.g. `~/Music/My-Crate`). The folder is scanned recursively and any new tracks are added; already-indexed tracks are skipped.
+    - **Rebuild from folder** — wipes the DB and re-fingerprints the given folder from scratch (asks for confirmation first).
+    - The indexed tracks table at the bottom is searchable — type to filter by artist, title, or path.
+
+The DB lives at `~/.visualizer/fingerprints.db` (same path the CLI uses), so anything you index in the UI is immediately available to the CLI and vice versa.
 
 ### Auto-Tracklist Setup (optional)
 
@@ -169,6 +201,15 @@ If you want the visualizer to detect and display each track in your mix automati
 | `--source-folder / -s` | (required) | Folder with source tracks; scanned recursively |
 | `--db / -d` | (required) | Output SQLite database path |
 | `--rebuild` | off | Delete the existing DB and rebuild from scratch |
+
+### `visualizer-ui` Flags
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--host` | `127.0.0.1` | Bind address. Use `0.0.0.0` to expose on your LAN. |
+| `--port` | `8765` | Port to serve on |
+| `--no-browser` | off | Do not auto-open the browser on launch |
+| `--reload` | off | Dev: enable uvicorn auto-reload on source changes |
 
 ### Styles
 

@@ -15,14 +15,23 @@ dependencies = [
     "soundfile>=0.12",
     "tqdm>=4.66",
     "mutagen>=1.47",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "python-multipart>=0.0.9",
+    "sse-starlette>=2.0",
 ]
 
 [project.scripts]
 visualize = "visualizer.cli:main"
 fingerprint-index = "visualizer.cli_index:main"
+visualizer-ui = "visualizer.ui.launcher:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-visualizer = ["palettes.json"]
+visualizer = [
+    "palettes.json",
+    "ui/static/*",
+    "ui/static/previews/*",
+]

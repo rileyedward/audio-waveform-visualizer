@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import argparse
 import sys
-import time
 from pathlib import Path
 
-from .fingerprint import build_index
+from tqdm import tqdm
+
+from .pipeline import IndexOptions, IndexProgress, run_index
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -28,6 +29,26 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _make_cli_callback():
+    state = {"bar": None}
+
+    def cb(p: IndexProgress) -> None:
+        if p.phase == "indexing":
+            if state["bar"] is None and p.total > 0:
+                state["bar"] = tqdm(total=p.total, unit="track")
+            if state["bar"] is not None:
+                delta = p.current - state["bar"].n
+                if delta > 0:
+                    state["bar"].update(delta)
+        elif p.message:
+            print(p.message)
+        if p.phase == "done" and state["bar"] is not None:
+            state["bar"].close()
+            state["bar"] = None
+
+    return cb
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     src = Path(args.source_folder).expanduser()
@@ -36,14 +57,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     print(f"indexing {src} → {args.db}")
-    t0 = time.time()
-    stats = build_index(src, args.db, rebuild=args.rebuild)
-    dt = time.time() - t0
-    print(
-        f"done in {dt:.1f}s — scanned: {stats['scanned']}, "
-        f"indexed: {stats['indexed']}, skipped: {stats['skipped']}, "
-        f"hashes: {stats['hashes']:,}"
-    )
+    opts = IndexOptions(source_folder=str(src), db=args.db, rebuild=args.rebuild)
+    try:
+        run_index(opts, progress_cb=_make_cli_callback())
+    except Exception as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
     return 0
 
 

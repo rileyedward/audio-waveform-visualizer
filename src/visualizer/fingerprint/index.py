@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from typing import Callable
 
 from tqdm import tqdm
 
 from .extract import FingerprintConfig, extract_fingerprints
 from .metadata import read_metadata
+
+ProgressCb = Callable[[int, int, str, int], None]
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tracks (
@@ -61,6 +64,7 @@ def build_index(
     db_path: Path | str,
     cfg: FingerprintConfig | None = None,
     rebuild: bool = False,
+    progress_cb: ProgressCb | None = None,
 ) -> dict:
     cfg = cfg or FingerprintConfig()
     src = Path(source_folder).expanduser().resolve()
@@ -73,12 +77,19 @@ def build_index(
 
     conn = open_db(db_path)
     files = _scan_folder(src)
-    stats = {"scanned": len(files), "indexed": 0, "skipped": 0, "hashes": 0}
+    total = len(files)
+    stats = {"scanned": total, "indexed": 0, "skipped": 0, "hashes": 0}
 
-    for fp in tqdm(files, unit="track"):
+    iterator = enumerate(files, start=1)
+    if progress_cb is None:
+        iterator = enumerate(tqdm(files, unit="track"), start=1)
+
+    for idx, fp in iterator:
         path_str = str(fp)
         if _track_already_indexed(conn, path_str) and not rebuild:
             stats["skipped"] += 1
+            if progress_cb:
+                progress_cb(idx, total, fp.name, stats["hashes"])
             continue
         try:
             meta = read_metadata(fp)
@@ -86,9 +97,13 @@ def build_index(
         except Exception as e:
             print(f"  skip {fp.name}: {e}")
             stats["skipped"] += 1
+            if progress_cb:
+                progress_cb(idx, total, fp.name, stats["hashes"])
             continue
         if not fps:
             stats["skipped"] += 1
+            if progress_cb:
+                progress_cb(idx, total, fp.name, stats["hashes"])
             continue
 
         cur = conn.execute(
@@ -103,6 +118,8 @@ def build_index(
         conn.commit()
         stats["indexed"] += 1
         stats["hashes"] += len(fps)
+        if progress_cb:
+            progress_cb(idx, total, fp.name, stats["hashes"])
 
     conn.close()
     return stats

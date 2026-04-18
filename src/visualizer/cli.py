@@ -2,25 +2,13 @@ from __future__ import annotations
 
 import argparse
 import sys
-import tempfile
-import time
 from pathlib import Path
 
-import numpy as np
 from tqdm import tqdm
 
-from .audio import (
-    compute_band_matrix,
-    compute_rms,
-    load_audio,
-    waveform_sample,
-)
-from .encode import FFmpegEncoder, mux_chapters
-from .fingerprint import match_mix
 from .palettes import DEFAULT_PALETTES_PATH, load_palettes
-from .render import FrameRenderer
-from .styles import FEATURE_KINDS, STYLES
-from .tracklist import write_chapter_metadata, write_youtube_txt
+from .pipeline import RenderOptions, RenderProgress, run_render
+from .styles import STYLES
 
 
 def parse_resolution(s: str) -> tuple[int, int]:
@@ -65,7 +53,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--preset", default="medium", help="x264 preset")
     p.add_argument("--duration", type=float, default=None,
                    help="Optional cap on rendered duration (seconds) for smoke tests")
-
     p.add_argument(
         "--fingerprint-db", default=None,
         help="Path to fingerprint SQLite DB (built via fingerprint-index)",
@@ -85,32 +72,37 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def _resolve_tracklist(mix_path: str, db_path: str):
-    print(f"matching tracks against {db_path}...")
-    t0 = time.time()
-    segments, transitions = match_mix(mix_path, db_path)
-    dt = time.time() - t0
-    print(f"  matched {len(segments)} tracks, {len(transitions)} transitions in {dt:.1f}s")
-    for seg in segments:
-        mins = int(seg.start_sec // 60)
-        secs = int(seg.start_sec % 60)
-        print(f"  [{mins:02d}:{secs:02d}] {seg.artist} — {seg.title} (conf={seg.confidence:.1f})")
-    return segments, transitions
+def _make_cli_callback():
+    state = {"bar": None, "phase": None}
+
+    def cb(p: RenderProgress) -> None:
+        if p.phase != state["phase"]:
+            if state["bar"] is not None:
+                state["bar"].close()
+                state["bar"] = None
+            state["phase"] = p.phase
+            if p.phase == "rendering" and p.total_frames > 0:
+                state["bar"] = tqdm(total=p.total_frames, unit="frame")
+
+        if p.phase == "rendering" and state["bar"] is not None:
+            delta = p.frame - state["bar"].n
+            if delta > 0:
+                state["bar"].update(delta)
+        elif p.message:
+            print(p.message)
+
+        if p.phase in ("done", "error") and state["bar"] is not None:
+            state["bar"].close()
+            state["bar"] = None
+
+    return cb
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
-    in_path = Path(args.input)
-    if not in_path.exists():
-        print(f"error: input not found: {in_path}", file=sys.stderr)
-        return 2
-
-    if args.auto_tracklist and not args.fingerprint_db:
-        print("error: --auto-tracklist requires --fingerprint-db", file=sys.stderr)
-        return 2
-    if args.auto_tracklist and not Path(args.fingerprint_db).exists():
-        print(f"error: fingerprint db not found: {args.fingerprint_db}", file=sys.stderr)
+    if not Path(args.input).exists():
+        print(f"error: input not found: {args.input}", file=sys.stderr)
         return 2
 
     palettes = load_palettes(args.palettes_file)
@@ -120,91 +112,46 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    palette = palettes[args.palette]
-    style_fn = STYLES[args.style]
-    feature_kind = FEATURE_KINDS[args.style]
 
-    segments = []
-    transitions = []
-    if args.auto_tracklist:
-        segments, transitions = _resolve_tracklist(str(in_path), args.fingerprint_db)
-
-    print(f"loading audio: {in_path}")
-    t0 = time.time()
-    y, sr, duration = load_audio(str(in_path))
-    if args.duration is not None:
-        duration = min(duration, args.duration)
-        y = y[: int(duration * sr)]
-    print(f"  duration: {duration:.2f}s, sr: {sr}, loaded in {time.time()-t0:.1f}s")
-
-    fps = args.fps
-    total_frames = int(duration * fps)
-    if total_frames < 1:
-        print("error: audio too short for any frames", file=sys.stderr)
+    if args.auto_tracklist and not args.fingerprint_db:
+        print("error: --auto-tracklist requires --fingerprint-db", file=sys.stderr)
+        return 2
+    if args.auto_tracklist and not Path(args.fingerprint_db).exists():
+        print(f"error: fingerprint db not found: {args.fingerprint_db}", file=sys.stderr)
         return 2
 
-    print(f"computing features (kind={feature_kind})...")
-    t0 = time.time()
-    bands = rms = None
-    if feature_kind == "bands":
-        bands = compute_band_matrix(y, sr, fps, n_bands=args.n_bands)
-    elif feature_kind == "energy":
-        rms = compute_rms(y, sr, fps)
-    print(f"  features ready in {time.time()-t0:.1f}s")
-
-    renderer = FrameRenderer(
-        size=args.resolution,
-        palette=palette,
-        style_fn=style_fn,
+    opts = RenderOptions(
+        input=args.input,
+        output=args.output,
+        style=args.style,
+        palette=args.palette,
         artist=args.artist,
         mix_name=args.mix_name,
         title=args.title,
-        logo_path=args.logo,
-        segments=segments,
-        transitions=transitions,
-    )
-
-    encoder = FFmpegEncoder(
-        audio_path=str(in_path),
-        output_path=args.output,
-        size=args.resolution,
-        fps=fps,
+        logo=args.logo,
+        fps=args.fps,
+        resolution=args.resolution,
+        n_bands=args.n_bands,
+        palettes_file=args.palettes_file,
         crf=args.crf,
         preset=args.preset,
+        duration=args.duration,
+        fingerprint_db=args.fingerprint_db,
+        auto_tracklist=args.auto_tracklist,
+        tracklist_out=args.tracklist_out,
+        chapters=args.chapters,
     )
 
-    print(f"rendering {total_frames} frames → {args.output}")
-    t0 = time.time()
-    with encoder:
-        for i in tqdm(range(total_frames), unit="frame"):
-            t = i / fps
-            if feature_kind == "bands":
-                col = min(i, bands.shape[1] - 1)
-                feat = bands[:, col]
-            elif feature_kind == "energy":
-                col = min(i, len(rms) - 1)
-                feat = rms[col]
-            else:  # wave
-                feat = waveform_sample(y, sr, fps, i)
-            frame = renderer.render(i, total_frames, feat, t)
-            encoder.write(frame)
-    dt = time.time() - t0
-    print(f"done in {dt:.1f}s ({total_frames/dt:.1f} fps render; real-time ratio {duration/dt:.2f}x)")
+    try:
+        result = run_render(opts, progress_cb=_make_cli_callback())
+    except Exception as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
 
-    if args.tracklist_out and segments:
-        write_youtube_txt(segments, args.tracklist_out)
-        print(f"wrote tracklist: {args.tracklist_out}")
-
-    if args.chapters and segments:
-        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as tmp:
-            chapter_path = tmp.name
-        try:
-            write_chapter_metadata(segments, duration, chapter_path)
-            mux_chapters(args.output, chapter_path)
-            print(f"embedded {len(segments)} chapters in {args.output}")
-        finally:
-            Path(chapter_path).unlink(missing_ok=True)
-
+    if result.tracklist_path:
+        print(f"wrote tracklist: {result.tracklist_path}")
+    if result.chapters_embedded:
+        print(f"embedded {len(result.segments)} chapters in {result.output_path}")
     return 0
 
 

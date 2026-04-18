@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Audio Waveform Visualizer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Audio Waveform Visualizer</div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="render">Render</button>
+      <button class="tab" data-tab="library">Library</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ============ RENDER TAB ============ -->
+    <section id="tab-render" class="tab-panel active">
+      <h1>Render a mix</h1>
+
+      <div class="card">
+        <label class="label">Mix file (.wav / .mp3)</label>
+        <div id="drop-zone" class="dropzone">
+          <input type="file" id="mix-file" accept=".wav,.mp3,.flac,.m4a,.aac,.ogg" hidden />
+          <div class="dropzone-inner">
+            <strong id="dropzone-text">Drop your mix here, or click to pick a file</strong>
+            <span id="mix-meta" class="muted"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <label class="label">Style</label>
+        <div id="styles-grid" class="grid"></div>
+      </div>
+
+      <div class="card">
+        <label class="label">Palette</label>
+        <div id="palettes-grid" class="grid"></div>
+      </div>
+
+      <div class="card">
+        <label class="label">Overlay text</label>
+        <div class="row">
+          <div class="field">
+            <label>Artist / channel</label>
+            <input id="artist" type="text" placeholder="Riley Edward" />
+          </div>
+          <div class="field">
+            <label>Mix name</label>
+            <input id="mix-name" type="text" placeholder="Live Mix | Disco Fever" />
+          </div>
+          <div class="field">
+            <label>Static title (only without auto-tracklist)</label>
+            <input id="title" type="text" placeholder="" />
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <label class="label">Tracklist</label>
+        <div class="toggles">
+          <label class="toggle">
+            <input id="auto-tracklist" type="checkbox" />
+            <span>Auto-detect tracks (overlay names + crossfade)</span>
+          </label>
+          <label class="toggle">
+            <input id="write-tracklist" type="checkbox" />
+            <span>Write YouTube tracklist.txt</span>
+          </label>
+          <label class="toggle">
+            <input id="chapters" type="checkbox" />
+            <span>Embed MP4 chapter markers</span>
+          </label>
+        </div>
+        <p class="muted small">Track features need a fingerprint DB (Library tab).</p>
+      </div>
+
+      <div class="card">
+        <label class="label">Output</label>
+        <div class="field">
+          <label>File name (saved to ~/Downloads)</label>
+          <input id="output-filename" type="text" placeholder="my-mix.mp4" />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="render-btn" class="primary">Render</button>
+        <span id="render-error" class="error"></span>
+      </div>
+
+      <div id="render-progress" class="card progress-card hidden">
+        <div class="progress-header">
+          <strong id="rp-phase">queued</strong>
+          <span id="rp-eta" class="muted"></span>
+        </div>
+        <div class="bar"><div id="rp-fill" class="bar-fill"></div></div>
+        <div id="rp-message" class="muted small"></div>
+        <pre id="rp-log" class="log"></pre>
+        <div id="rp-done" class="hidden">
+          <button id="rp-reveal" class="secondary">Reveal in Finder</button>
+          <span id="rp-output" class="muted small"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ LIBRARY TAB ============ -->
+    <section id="tab-library" class="tab-panel">
+      <h1>Library</h1>
+
+      <div class="card stats">
+        <div><span class="stat-num" id="lib-tracks">—</span><span class="stat-label">tracks</span></div>
+        <div><span class="stat-num" id="lib-hashes">—</span><span class="stat-label">fingerprints</span></div>
+        <div><span class="stat-num" id="lib-size">—</span><span class="stat-label">db size</span></div>
+        <div class="db-path muted small" id="lib-path"></div>
+      </div>
+
+      <div id="index-progress" class="card progress-card hidden">
+        <div class="progress-header">
+          <strong id="ip-phase">queued</strong>
+          <span id="ip-eta" class="muted"></span>
+        </div>
+        <div class="bar"><div id="ip-fill" class="bar-fill"></div></div>
+        <div id="ip-message" class="muted small"></div>
+      </div>
+
+      <div class="card">
+        <label class="label">Add tracks (upload files)</label>
+        <input type="file" id="lib-upload" multiple accept=".mp3,.wav,.flac,.m4a,.aac,.ogg" />
+        <p class="muted small">Files copy to <code>~/Music/visualizer-library/</code> then index.</p>
+      </div>
+
+      <div class="card">
+        <label class="label">Index a folder</label>
+        <div class="row">
+          <input id="index-folder-path" type="text" placeholder="~/Music/My-Crate" />
+          <button id="index-folder-btn" class="secondary">Index</button>
+        </div>
+        <p class="muted small">Adds new tracks; skips already-indexed ones.</p>
+      </div>
+
+      <div class="card danger">
+        <label class="label">Rebuild from folder (wipes DB)</label>
+        <div class="row">
+          <input id="rebuild-folder-path" type="text" placeholder="~/Music/My-Crate" />
+          <button id="rebuild-btn" class="danger-btn">Rebuild</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row between">
+          <label class="label">Indexed tracks</label>
+          <input id="lib-search" type="text" placeholder="filter…" />
+        </div>
+        <div class="table-wrap">
+          <table class="tracks">
+            <thead><tr><th>Artist</th><th>Title</th><th>Path</th></tr></thead>
+            <tbody id="lib-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
