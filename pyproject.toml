@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "audio-visualizer"
+version = "0.1.0"
+description = "Local CLI that renders Monstercat-style visualizer videos for DJ mixes."
+requires-python = ">=3.11"
+dependencies = [
+    "librosa>=0.10.2",
+    "numpy>=1.26",
+    "Pillow>=10.2",
+    "soundfile>=0.12",
+    "tqdm>=4.66",
+]
+
+[project.scripts]
+visualize = "visualizer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+visualizer = ["palettes.json"]

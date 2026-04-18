@@ -1,0 +1,8 @@
+{
+  "sunset":  {"bg": ["#2b0a3d", "#ff6f61"], "viz": ["#ffd36e", "#ff6f61"]},
+  "neon":    {"bg": ["#0b0b2b", "#00f0ff"], "viz": ["#ff00e1", "#00f0ff"]},
+  "ocean":   {"bg": ["#001f3f", "#39cccc"], "viz": ["#7fdbff", "#ffffff"]},
+  "mono":    {"bg": ["#111111", "#444444"], "viz": ["#eeeeee", "#ffffff"]},
+  "forest":  {"bg": ["#0a2e1f", "#6fbf73"], "viz": ["#d9f99d", "#6fbf73"]},
+  "ember":   {"bg": ["#1a0000", "#ff4500"], "viz": ["#ffb347", "#ff4500"]}
+}
