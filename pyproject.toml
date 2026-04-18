@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "audio-visualizer"
+name = "audio-waveform-visualizer"
 version = "0.1.0"
 description = "Local CLI that renders Monstercat-style visualizer videos for DJ mixes."
 requires-python = ">=3.11"

@@ -1,16 +1,16 @@
-# Audio Visualizer
+# Audio Waveform Visualizer
 
 Render artistic visualizer videos for your DJ mixes.
 
 ## Overview
 
-### What is Audio Visualizer?
+### What is Audio Waveform Visualizer?
 
-Audio Visualizer is a local command-line application designed to turn your DJ mixes into uploadable, YouTube-ready visualizer videos. Feed it a WAV or MP3 of your mix, pick a visual style and color palette, and it produces a polished 1080p30 H.264 MP4 with a reactive waveform, your artist/mix title, an optional logo, and a progress bar. Runs entirely on your machine — no uploads, no accounts, no cloud dependencies.
+Audio Waveform Visualizer is a local command-line application designed to turn your DJ mixes into uploadable, YouTube-ready visualizer videos. Feed it a WAV or MP3 of your mix, pick a visual style and color palette, and it produces a polished 1080p30 H.264 MP4 with a reactive waveform, your artist/mix title, an optional logo, and a progress bar. Runs entirely on your machine — no uploads, no accounts, no cloud dependencies.
 
-### Why Use Audio Visualizer?
+### Why Use Audio Waveform Visualizer?
 
-Posting a mix to YouTube without visuals leaves it buried. Existing visualizer tools are either browser-based (capped at short clips), locked behind subscriptions, or require wrestling with video editing software for every release. Audio Visualizer solves this by giving you a scripted, repeatable pipeline: one command in, one video out. Every mix gets the same treatment, rendered from your own files, with full control over look and feel via configurable palettes and styles.
+Posting a mix to YouTube without visuals leaves it buried. Existing visualizer tools are either browser-based (capped at short clips), locked behind subscriptions, or require wrestling with video editing software for every release. Audio Waveform Visualizer solves this by giving you a scripted, repeatable pipeline: one command in, one video out. Every mix gets the same treatment, rendered from your own files, with full control over look and feel via configurable palettes and styles.
 
 ### Key Features
 
