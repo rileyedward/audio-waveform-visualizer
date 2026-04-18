@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+from .fingerprint.match import TrackSegment, TransitionZone
 from .palettes import RGB, vertical_gradient
 
 FONT_CANDIDATES = [
@@ -40,6 +41,12 @@ def build_logo(logo_path: str | None, diameter: int) -> Image.Image | None:
     return img
 
 
+def _format_track(seg: TrackSegment | None) -> str:
+    if seg is None:
+        return ""
+    return f"{seg.artist} — {seg.title}"
+
+
 class FrameRenderer:
     def __init__(
         self,
@@ -49,12 +56,16 @@ class FrameRenderer:
         artist: str,
         title: str,
         logo_path: str | None = None,
+        segments: list[TrackSegment] | None = None,
+        transitions: list[TransitionZone] | None = None,
     ):
         self.size = size
         self.palette = palette
         self.style_fn = style_fn
         self.artist = artist
         self.title = title
+        self.segments = sorted(segments or [], key=lambda s: s.start_sec)
+        self.transitions = sorted(transitions or [], key=lambda z: z.start_sec)
 
         w, h = size
         self.background = build_background(size, palette["bg"][0], palette["bg"][1])
@@ -64,8 +75,40 @@ class FrameRenderer:
 
         self.font_artist = _load_font(34)
         self.font_title = _load_font(22)
+        self.font_next = _load_font(18)
         self.progress_color = palette["viz"][1]
         self.progress_bg = (255, 255, 255, 40)
+
+    def _resolve(
+        self, t: float
+    ) -> tuple[TrackSegment | None, TrackSegment | None, TransitionZone | None]:
+        current: TrackSegment | None = None
+        nxt: TrackSegment | None = None
+        for seg in self.segments:
+            if seg.start_sec <= t < seg.end_sec:
+                current = seg
+            elif seg.start_sec > t and nxt is None:
+                nxt = seg
+                break
+        trans: TransitionZone | None = None
+        for z in self.transitions:
+            if z.start_sec <= t < z.end_sec:
+                trans = z
+                break
+        return current, nxt, trans
+
+    def _draw_text_alpha(
+        self,
+        draw: ImageDraw.ImageDraw,
+        xy: tuple[int, int],
+        text: str,
+        font: ImageFont.ImageFont,
+        alpha: int,
+    ) -> None:
+        if not text or alpha <= 0:
+            return
+        a = max(0, min(255, int(alpha)))
+        draw.text(xy, text, font=font, fill=(255, 255, 255, a))
 
     def render(self, frame_idx: int, total_frames: int, features: np.ndarray, t: float) -> bytes:
         w, h = self.size
@@ -78,21 +121,43 @@ class FrameRenderer:
             overlay.alpha_composite(self.logo, self.logo_pos)
 
         draw = ImageDraw.Draw(overlay, "RGBA")
-
         margin_x = int(w * 0.04)
         text_y = int(h * 0.90)
-        draw.text(
-            (margin_x, text_y),
-            self.artist,
-            font=self.font_artist,
-            fill=(255, 255, 255, 240),
+
+        self._draw_text_alpha(
+            draw, (margin_x, text_y), self.artist, self.font_artist, 240
         )
-        draw.text(
-            (margin_x, text_y + 40),
-            self.title,
-            font=self.font_title,
-            fill=(255, 255, 255, 200),
-        )
+
+        if self.segments:
+            current, nxt, trans = self._resolve(t)
+            if trans is not None:
+                zone_len = max(1e-6, trans.end_sec - trans.start_sec)
+                progress = max(0.0, min(1.0, (t - trans.start_sec) / zone_len))
+                out_alpha = int(220 * (1.0 - progress))
+                in_alpha = int(220 * progress)
+                self._draw_text_alpha(
+                    draw, (margin_x, text_y + 40),
+                    _format_track(current), self.font_title, out_alpha,
+                )
+                incoming = _format_track(nxt)
+                if incoming:
+                    self._draw_text_alpha(
+                        draw, (margin_x, text_y + 75),
+                        f"NEXT: {incoming}", self.font_next, in_alpha,
+                    )
+            elif current is not None:
+                self._draw_text_alpha(
+                    draw, (margin_x, text_y + 40),
+                    _format_track(current), self.font_title, 220,
+                )
+            else:
+                self._draw_text_alpha(
+                    draw, (margin_x, text_y + 40), self.title, self.font_title, 200
+                )
+        else:
+            self._draw_text_alpha(
+                draw, (margin_x, text_y + 40), self.title, self.font_title, 200
+            )
 
         bar_h = 4
         bar_y = h - bar_h - 2

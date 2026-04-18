@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -77,3 +78,37 @@ class FFmpegEncoder:
         err = self.proc.stderr.read().decode("utf-8", errors="replace") if self.proc.stderr else ""
         if rc != 0 and exc_type is None:
             raise RuntimeError(f"ffmpeg exited {rc}: {err}")
+
+
+def mux_chapters(mp4_path: str, chapter_metadata_path: str) -> None:
+    """Re-mux an MP4 in-place with FFmpeg chapter metadata."""
+    if shutil.which("ffmpeg") is None:
+        raise RuntimeError("ffmpeg not found on PATH.")
+
+    src = Path(mp4_path).resolve()
+    meta = Path(chapter_metadata_path).resolve()
+    if not src.exists():
+        raise FileNotFoundError(src)
+    if not meta.exists():
+        raise FileNotFoundError(meta)
+
+    tmp = src.with_suffix(".chapters.tmp.mp4")
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-loglevel", "error",
+        "-i", str(src),
+        "-i", str(meta),
+        "-map_metadata", "1",
+        "-map_chapters", "1",
+        "-codec", "copy",
+        str(tmp),
+    ]
+    result = subprocess.run(cmd, capture_output=True)
+    if result.returncode != 0:
+        err = result.stderr.decode("utf-8", errors="replace")
+        if tmp.exists():
+            tmp.unlink()
+        raise RuntimeError(f"ffmpeg chapter mux failed: {err}")
+    os.replace(tmp, src)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -14,10 +15,12 @@ from .audio import (
     load_audio,
     waveform_sample,
 )
-from .encode import FFmpegEncoder
+from .encode import FFmpegEncoder, mux_chapters
+from .fingerprint import match_mix
 from .palettes import DEFAULT_PALETTES_PATH, load_palettes
 from .render import FrameRenderer
 from .styles import FEATURE_KINDS, STYLES
+from .tracklist import write_chapter_metadata, write_youtube_txt
 
 
 def parse_resolution(s: str) -> tuple[int, int]:
@@ -57,7 +60,37 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--preset", default="medium", help="x264 preset")
     p.add_argument("--duration", type=float, default=None,
                    help="Optional cap on rendered duration (seconds) for smoke tests")
+
+    p.add_argument(
+        "--fingerprint-db", default=None,
+        help="Path to fingerprint SQLite DB (built via fingerprint-index)",
+    )
+    p.add_argument(
+        "--auto-tracklist", action="store_true",
+        help="Use --fingerprint-db to detect tracks and overlay dynamic text",
+    )
+    p.add_argument(
+        "--tracklist-out", default=None,
+        help="Write YouTube-formatted tracklist to this path",
+    )
+    p.add_argument(
+        "--chapters", action="store_true",
+        help="Embed MP4 chapter markers at track boundaries",
+    )
     return p
+
+
+def _resolve_tracklist(mix_path: str, db_path: str):
+    print(f"matching tracks against {db_path}...")
+    t0 = time.time()
+    segments, transitions = match_mix(mix_path, db_path)
+    dt = time.time() - t0
+    print(f"  matched {len(segments)} tracks, {len(transitions)} transitions in {dt:.1f}s")
+    for seg in segments:
+        mins = int(seg.start_sec // 60)
+        secs = int(seg.start_sec % 60)
+        print(f"  [{mins:02d}:{secs:02d}] {seg.artist} — {seg.title} (conf={seg.confidence:.1f})")
+    return segments, transitions
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -66,6 +99,13 @@ def main(argv: list[str] | None = None) -> int:
     in_path = Path(args.input)
     if not in_path.exists():
         print(f"error: input not found: {in_path}", file=sys.stderr)
+        return 2
+
+    if args.auto_tracklist and not args.fingerprint_db:
+        print("error: --auto-tracklist requires --fingerprint-db", file=sys.stderr)
+        return 2
+    if args.auto_tracklist and not Path(args.fingerprint_db).exists():
+        print(f"error: fingerprint db not found: {args.fingerprint_db}", file=sys.stderr)
         return 2
 
     palettes = load_palettes(args.palettes_file)
@@ -78,6 +118,11 @@ def main(argv: list[str] | None = None) -> int:
     palette = palettes[args.palette]
     style_fn = STYLES[args.style]
     feature_kind = FEATURE_KINDS[args.style]
+
+    segments = []
+    transitions = []
+    if args.auto_tracklist:
+        segments, transitions = _resolve_tracklist(str(in_path), args.fingerprint_db)
 
     print(f"loading audio: {in_path}")
     t0 = time.time()
@@ -109,6 +154,8 @@ def main(argv: list[str] | None = None) -> int:
         artist=args.artist,
         title=args.title,
         logo_path=args.logo,
+        segments=segments,
+        transitions=transitions,
     )
 
     encoder = FFmpegEncoder(
@@ -137,6 +184,21 @@ def main(argv: list[str] | None = None) -> int:
             encoder.write(frame)
     dt = time.time() - t0
     print(f"done in {dt:.1f}s ({total_frames/dt:.1f} fps render; real-time ratio {duration/dt:.2f}x)")
+
+    if args.tracklist_out and segments:
+        write_youtube_txt(segments, args.tracklist_out)
+        print(f"wrote tracklist: {args.tracklist_out}")
+
+    if args.chapters and segments:
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as tmp:
+            chapter_path = tmp.name
+        try:
+            write_chapter_metadata(segments, duration, chapter_path)
+            mux_chapters(args.output, chapter_path)
+            print(f"embedded {len(segments)} chapters in {args.output}")
+        finally:
+            Path(chapter_path).unlink(missing_ok=True)
+
     return 0
 
 
