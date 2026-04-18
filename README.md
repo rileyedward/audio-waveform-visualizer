@@ -75,7 +75,8 @@ Ensure you have the following prerequisites installed on your system. You can ve
       --style radial \
       --palette sunset \
       --artist "Riley Edward" \
-      --title "First Transmissions | Disco Fever (Soulful House / Nu Disco)" \
+      --mix-name "Live Mix | Disco Fever" \
+      --title "First Transmissions (Soulful House / Nu Disco)" \
       --logo ~/Downloads/logo.png
     ```
 
@@ -112,6 +113,7 @@ If you want the visualizer to detect and display each track in your mix automati
       --style radial \
       --palette sunset \
       --artist "Riley Edward" \
+      --mix-name "Live Mix | Disco Fever" \
       --logo ~/Downloads/logo.png \
       --fingerprint-db ~/.visualizer/fingerprints.db \
       --auto-tracklist \
@@ -144,8 +146,9 @@ If you want the visualizer to detect and display each track in your mix automati
 | `--output / -o` | (required) | MP4 path |
 | `--style / -s` | (required) | `radial`, `bars`, `waveform`, `particles` |
 | `--palette / -p` | (required) | `sunset`, `neon`, `ocean`, `mono`, `forest`, `ember` |
-| `--artist` | `""` | Small text, bottom-left (acts as channel/DJ name when `--auto-tracklist` is on) |
-| `--title` | `""` | Smaller text below artist (ignored when `--auto-tracklist` is on and a track is detected) |
+| `--artist` | `""` | DJ / channel name, rendered on the top line |
+| `--mix-name` | `""` | Mix name; rendered on the same line as `--artist`, joined with ` - ` (e.g. `Riley Edward - Live Mix \| Disco Fever`) |
+| `--title` | `""` | Smaller text below the header; ignored when `--auto-tracklist` is on and a track is detected |
 | `--logo` | (none) | Image path; circular-masked, centered |
 | `--fps` | `30` | |
 | `--resolution` | `1920x1080` | `WxH` |

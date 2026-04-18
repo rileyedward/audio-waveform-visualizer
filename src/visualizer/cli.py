@@ -43,8 +43,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Visualizer style",
     )
     p.add_argument("--palette", "-p", required=True, help="Palette name (see palettes.json)")
-    p.add_argument("--artist", default="", help="Artist text overlay (e.g. 'Riley Edward')")
-    p.add_argument("--title", default="", help="Mix title text overlay")
+    p.add_argument("--artist", default="", help="Artist/DJ name overlay (e.g. 'Riley Edward')")
+    p.add_argument(
+        "--mix-name", default="",
+        help="Mix name; rendered on the same line as --artist, separated by ' - '"
+             " (e.g. 'Live Mix | Disco Fever')",
+    )
+    p.add_argument("--title", default="", help="Mix title text overlay (used only when --auto-tracklist is off)")
     p.add_argument("--logo", default=None, help="Optional logo image path (circular masked)")
     p.add_argument("--fps", type=int, default=30, help="Frames per second (default 30)")
     p.add_argument(
@@ -152,6 +157,7 @@ def main(argv: list[str] | None = None) -> int:
         palette=palette,
         style_fn=style_fn,
         artist=args.artist,
+        mix_name=args.mix_name,
         title=args.title,
         logo_path=args.logo,
         segments=segments,

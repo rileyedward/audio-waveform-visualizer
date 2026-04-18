@@ -55,6 +55,7 @@ class FrameRenderer:
         style_fn,
         artist: str,
         title: str,
+        mix_name: str = "",
         logo_path: str | None = None,
         segments: list[TrackSegment] | None = None,
         transitions: list[TransitionZone] | None = None,
@@ -63,6 +64,8 @@ class FrameRenderer:
         self.palette = palette
         self.style_fn = style_fn
         self.artist = artist
+        self.mix_name = mix_name
+        self.header = " - ".join(s for s in (artist, mix_name) if s)
         self.title = title
         self.segments = sorted(segments or [], key=lambda s: s.start_sec)
         self.transitions = sorted(transitions or [], key=lambda z: z.start_sec)
@@ -125,7 +128,7 @@ class FrameRenderer:
         text_y = int(h * 0.90)
 
         self._draw_text_alpha(
-            draw, (margin_x, text_y), self.artist, self.font_artist, 240
+            draw, (margin_x, text_y), self.header, self.font_artist, 240
         )
 
         if self.segments:
